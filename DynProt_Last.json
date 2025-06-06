@@ -1,0 +1,1038 @@
+{
+  "name": "DynProt_Last",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "9e711b4d-c391-4e6b-b36a-4a268de742b3",
+        "formTitle": "🏋️ Votre Profil Nutritionnel DynProt",
+        "formDescription": "Créons ensemble votre profil personnalisé pour un suivi optimal des protéines !",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Prénom",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Âge",
+              "fieldType": "number",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Poids actuel (kg)",
+              "fieldType": "number",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Objectif quotidien de protéines (g)",
+              "fieldType": "number",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Niveau d'activité",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Sédentaire"
+                  },
+                  {
+                    "option": "Légèrement actif"
+                  },
+                  {
+                    "option": "Modérément actif"
+                  },
+                  {
+                    "option": "Très actif"
+                  },
+                  {
+                    "option": "Extrêmement actif"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Objectif principal",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Maintenir mon poids actuel"
+                  },
+                  {
+                    "option": "Perdre du poids / Définition musculaire"
+                  },
+                  {
+                    "option": "Prendre de la masse musculaire"
+                  },
+                  {
+                    "option": "Améliorer mes performances sportives"
+                  }
+                ]
+              },
+              "requiredField": true
+            }
+          ]
+        },
+        "responseMode": "responseNode",
+        "options": {
+          "appendAttribution": "={{ false }}"
+        }
+      },
+      "id": "0e484f99-2e8d-4b67-8641-a1271455b041",
+      "name": "📝 Enhanced Form Onboarding",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "9e711b4d-c391-4e6b-b36a-4a268de742b3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 💾 Sauvegarde du profil utilisateur initial - VERSION CORRIGÉE\nconst formData = $input.first().json;\n\n// Génération d'un ID utilisateur unique\nconst userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);\n\n// 🔧 CORRECTION : Mapping correct des valeurs du formulaire\nconst objectifMapping = {\n  \"Maintenir mon poids actuel\": \"Maintien du poids\",\n  \"Perdre du poids / Définition musculaire\": \"Perte de poids\", \n  \"Prendre de la masse musculaire\": \"Prise de masse\",\n  \"Améliorer mes performances sportives\": \"Performance sportive\"\n};\n\n// Récupération et mapping de l'objectif principal\nconst objectifOriginal = formData['Objectif principal'];\nconst objectifMapped = objectifMapping[objectifOriginal] || objectifOriginal;\n\nconsole.log('Objectif original:', objectifOriginal);\nconsole.log('Objectif mappé:', objectifMapped);\n\nconst userProfile = {\n  user_id: userId,\n  prenom: formData['Prénom'],\n  age: parseInt(formData['Âge']),\n  poids: parseFloat(formData['Poids actuel (kg)']),\n  objectif_proteines: parseInt(formData['Objectif quotidien de protéines (g)']),\n  niveau_activite: formData['Niveau d\\'activité'],\n  objectif_principal: objectifMapped, // ← Utilise la valeur mappée\n  created_at: new Date().toISOString(),\n  onboarding_completed: true\n};\n\nconsole.log('Profil utilisateur créé:', JSON.stringify(userProfile, null, 2));\n\nreturn [{ json: userProfile }];"
+      },
+      "id": "4553b8b6-2423-4f1b-88b1-ee08cf55613a",
+      "name": "🔧 Process Profile",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Profil utilisateur avec UPSERT\nINSERT INTO user_profiles (\n  user_id, prenom, age, poids, niveau_activite, objectif_principal, created_at\n) VALUES (\n  '{{ $json.user_id }}',\n  '{{ $json.prenom }}',\n  {{ $json.age }},\n  {{ $json.poids }},\n  '{{ $json.niveau_activite }}',\n  '{{ $json.objectif_principal }}',\n  '{{ $json.created_at }}'\n) ON CONFLICT (user_id) DO UPDATE SET\n  prenom = EXCLUDED.prenom,\n  age = EXCLUDED.age,\n  poids = EXCLUDED.poids,\n  niveau_activite = EXCLUDED.niveau_activite,\n  objectif_principal = EXCLUDED.objectif_principal;\n\n-- Objectif protéines avec UPSERT\nINSERT INTO user_goals (\n  user_id, daily_protein_goal, created_at\n) VALUES (\n  '{{ $json.user_id }}',\n  {{ $json.objectif_proteines }},\n  '{{ $json.created_at }}'\n) ON CONFLICT (user_id) DO UPDATE SET\n  daily_protein_goal = EXCLUDED.daily_protein_goal;\n\n-- Statut onboarding avec UPSERT\nINSERT INTO user_onboarding_status (\n  user_id, onboarding_completed, welcome_message_sent, created_at\n) VALUES (\n  '{{ $json.user_id }}',\n  true,\n  false,\n  '{{ $json.created_at }}'\n) ON CONFLICT (user_id) DO UPDATE SET\n  onboarding_completed = EXCLUDED.onboarding_completed,\n  welcome_message_sent = false;\n\n-- Retour des données\nSELECT \n  up.user_id,\n  up.prenom,\n  up.age,\n  up.poids,\n  up.niveau_activite,\n  up.objectif_principal,\n  ug.daily_protein_goal as objectif_proteines,\n  'profile_created' as status\nFROM user_profiles up\nJOIN user_goals ug ON up.user_id = ug.user_id\nWHERE up.user_id = '{{ $json.user_id }}';",
+        "options": {}
+      },
+      "id": "16122c2e-8c90-4757-9277-499004c45e58",
+      "name": "💾 Save User Profile",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        440,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "GaPd24j9QO3x8L5L",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🎉 Génération du message de bienvenue avec URL webhook corrigée\nconst userData = $input.first().json;\n\n// URL du chat corrigée avec le bon webhook GET\nconst chatUrlWithMessage = `http://localhost:5678/webhook/e4a90603-3a21-4289-9f42-0c83f4caf994?userId=${userData.user_id}`;\n\n// Message d'initialisation (pour compatibilité si besoin)\nconst initMessage = `INIT_USER:${userData.user_id}|Bonjour ! Je suis votre nouvel utilisateur et j'aimerais commencer le suivi de mes protéines.`;\n\n// Créer le message de bienvenue avec les données utilisateur\nconst welcomeMessage = {\n  user_id: userData.user_id,\n  message_type: 'system_welcome',\n  content: `🎉 **Bienvenue ${userData.prenom} !**\n\nVotre profil nutritionnel a été créé avec succès :\n\n📊 **Votre configuration :**\n• **Objectif quotidien** : ${userData.objectif_proteines}g de protéines\n• **Poids actuel** : ${userData.poids}kg\n• **Niveau d'activité** : ${userData.niveau_activite}\n• **Objectif** : ${userData.objectif_principal}\n\n💬 **Comment ça marche ?**\nDécrivez-moi simplement vos repas et je calculerai automatiquement les protéines !\n\n📝 **Exemples d'utilisation :**\n• \"J'ai mangé 200g de poulet grillé\"\n• \"Une omelette avec 3 œufs\"\n• \"Un shake de whey de 30g\"\n• \"Voici une photo de mon repas\" (avec image)\n\n🎯 **Commencez dès maintenant !**\nCliquez sur le bouton ci-dessous pour accéder à votre chat personnalisé !`,\n  timestamp: new Date().toISOString(),\n  auto_generated: true,\n  chat_url: chatUrlWithMessage, // ← URL corrigée\n  init_message: initMessage,\n  user_profile: userData\n};\n\nconsole.log('Message de bienvenue généré avec URL corrigée:', JSON.stringify(welcomeMessage, null, 2));\nconsole.log('Chat URL:', chatUrlWithMessage);\n\nreturn [{ json: welcomeMessage }];"
+      },
+      "id": "c3b28a6a-e43c-4d92-bcb1-b67873f6c164",
+      "name": "💬 Generate Welcome Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Sauvegarde du message de bienvenue\nINSERT INTO chat_messages (\n  user_id,\n  message_content,\n  message_type,\n  sender_type,\n  timestamp,\n  metadata\n) VALUES (\n  '{{ $json.user_id }}',\n  $message${{ $json.content }}$message$,\n  '{{ $json.message_type }}',\n  'system',\n  '{{ $json.timestamp }}',\n  '{\"auto_generated\": true, \"onboarding_complete\": true}'\n);\n\n-- Mise à jour du statut d'onboarding\nUPDATE user_onboarding_status \nSET welcome_message_sent = true, \n    updated_at = NOW() \nWHERE user_id = '{{ $json.user_id }}';\n\n-- Retour des données avec URL du chat\nSELECT \n  '{{ $json.user_id }}' as user_id,\n  '{{ $json.chat_url }}' as chat_url,\n  'welcome_saved' as status,\n  '{{ $json.user_id }}' as user_profile_id;",
+        "options": {}
+      },
+      "id": "56aa1389-7d97-4e6e-a1d7-6429ada841b9",
+      "name": "💾 Save Welcome Message",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        880,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "GaPd24j9QO3x8L5L",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🎨 Page de succès avec URL webhook corrigée\nconst data = $('💾 Save User Profile').first().json;\n\nconsole.log('Données reçues dans Generate Success Page:', JSON.stringify(data, null, 2));\n\n// Récupérer les données utilisateur\nlet userData = {\n  prenom: data.prenom || 'Utilisateur',\n  objectif_proteines: data.objectif_proteines || 120,\n  poids: data.poids || 70,\n  niveau_activite: data.niveau_activite || 'Modérément actif',\n  objectif_principal: data.objectif_principal || 'Maintien du poids'\n};\n\n// URL corrigée avec le bon webhook GET\nconst chatUrl = `http://localhost:5678/webhook/e4a90603-3a21-4289-9f42-0c83f4caf994?userId=${data.user_id}&prenom=${data.prenom}`;\nconst userId = data.user_id;\n\nconsole.log('URL de chat générée:', chatUrl);\n\nconst successPage = `<!doctypehtml><html lang=fr><meta charset=UTF-8><meta content=\"width=device-width,initial-scale=1\"name=viewport><title>DynProt - Profil Créé ✅</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,#667eea 0,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.container{background:rgba(255,255,255,.95);backdrop-filter:blur(10px);border-radius:24px;padding:40px;box-shadow:0 20px 40px rgba(0,0,0,.1);text-align:center;max-width:520px;width:100%;animation:slideUp .6s ease-out}@keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}.success-icon{font-size:72px;margin-bottom:24px;animation:bounce 1s ease-in-out}@keyframes bounce{0%,100%,20%,50%,80%{transform:translateY(0)}40%{transform:translateY(-20px)}60%{transform:translateY(-10px)}}h1{color:#333;margin-bottom:16px;font-size:28px;font-weight:700}.subtitle{color:#666;margin-bottom:32px;font-size:18px}.user-info{background:linear-gradient(135deg,#f8f9fa 0,#e9ecef 100%);border-radius:16px;padding:24px;margin:24px 0;border:1px solid rgba(0,0,0,.05)}.user-info h3{color:#495057;margin-bottom:16px;font-size:20px}.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}.stat-item{background:#fff;padding:12px;border-radius:8px;border:1px solid rgba(0,0,0,.05)}.stat-label{font-size:12px;color:#6c757d;margin-bottom:4px;text-transform:uppercase;font-weight:600;letter-spacing:.5px}.stat-value{font-size:16px;font-weight:700;color:#495057}.chat-button{background:linear-gradient(135deg,#667eea 0,#764ba2 100%);color:#fff;border:none;border-radius:50px;padding:16px 32px;font-size:18px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px;margin:24px 0;transition:all .3s ease;box-shadow:0 4px 15px rgba(102,126,234,.4)}.chat-button:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(102,126,234,.6)}.tips{background:linear-gradient(135deg,#e3f2fd 0,#bbdefb 100%);border-radius:16px;padding:24px;margin-top:32px;text-align:left;border:1px solid rgba(33,150,243,.1)}.tips h4{color:#1565c0;margin-bottom:16px;display:flex;align-items:center;gap:8px}.tips ul{list-style:none;margin-bottom:16px}.tips li{margin-bottom:8px;padding-left:20px;position:relative;color:#1976d2}.tips li::before{content:'✓';position:absolute;left:0;color:#4caf50;font-weight:700}.examples{background:rgba(255,255,255,.7);border-radius:8px;padding:12px;font-size:14px;color:#37474f;line-height:1.4}.countdown{margin-top:24px;font-size:14px;color:#666}.progress-bar{width:100%;height:4px;background:rgba(102,126,234,.2);border-radius:2px;margin-top:8px;overflow:hidden}.progress-fill{height:100%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:2px;animation:progress 8s linear}@keyframes progress{from{width:0%}to{width:100%}}</style><div class=container><div class=success-icon>🎉</div><h1>Profil créé avec succès !</h1><p class=subtitle>Bonjour <strong>${userData.prenom}</strong>, votre assistant nutritionnel est prêt !<div class=user-info><h3>📊 Votre configuration DynProt</h3><div class=stat-grid><div class=stat-item><div class=stat-label>Objectif quotidien</div><div class=stat-value>${userData.objectif_proteines}g</div></div><div class=stat-item><div class=stat-label>Poids actuel</div><div class=stat-value>${userData.poids}kg</div></div><div class=stat-item><div class=stat-label>Niveau d'activité</div><div class=stat-value>${userData.niveau_activite}</div></div><div class=stat-item><div class=stat-label>Objectif</div><div class=stat-value>${userData.objectif_principal}</div></div></div></div><a class=chat-button href=${chatUrl}>💬 Commencer le suivi</a><div class=tips><h4>💡 Comment utiliser DynProt ?</h4><ul><li>Décrivez vos repas en langage naturel<li>L'IA calcule automatiquement les protéines<li>Suivez votre progression en temps réel<li>Envoyez des photos de vos repas</ul><div class=examples><strong>Exemples de messages :</strong><br>\"200g de saumon grillé\"<br>\"Une omelette avec 3 œufs et jambon\"<br>\"Un shake de whey vanille 30g\"<br>\"Voici une photo de mon repas\" + 📸</div></div><div class=countdown><div>Redirection automatique dans <span id=timer>8</span> secondes</div><div class=progress-bar><div class=progress-fill></div></div></div></div><script>const userId = '${userId}';const chatUrl = '${chatUrl}';let countdown = 8;const timerElement = document.getElementById('timer');const interval = setInterval(() => {countdown--;timerElement.textContent = countdown;if (countdown <= 0) {clearInterval(interval);window.location.href = chatUrl;}}, 1000);</script>`;\n\nreturn [{\n  json: {\n    htmlContent: successPage,\n    chatUrl: chatUrl,\n    userId: userId,\n    responseType: 'html'\n  }\n}];"
+      },
+      "id": "4e396e05-bc95-4ff8-bef8-670fe30468e2",
+      "name": "🎨 Generate Success Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🔧 ENHANCED PREPARE CHAT DATA - VRAIMENT Corrigé\nconst data = $input.first().json;\n\nconsole.log('=== ENHANCED PREPARE CHAT DATA ===');\nconsole.log('🔍 Données reçues:', JSON.stringify(data, null, 2));\nconsole.log('🔍 Body:', JSON.stringify(data.body, null, 2));\nconsole.log('🔍 Query:', JSON.stringify(data.query, null, 2));\n\nlet userId = 'anonymous_' + Date.now(); // Fallback\nlet actualMessage = '';\n\n// WEBHOOK POST - Les données sont dans data.body\nif (data.body && typeof data.body === 'object') {\n  console.log('📨 Données POST détectées dans body');\n  \n  if (data.body.userId) {\n    userId = data.body.userId;\n    console.log('✅ User ID trouvé dans body:', userId);\n  }\n  \n  if (data.body.message) {\n    actualMessage = data.body.message;\n    console.log('✅ Message trouvé dans body:', actualMessage);\n  }\n}\n// WEBHOOK GET - Les données sont dans data.query  \nelse if (data.query && data.query.userId) {\n  console.log('📥 Données GET détectées dans query');\n  userId = data.query.userId;\n  actualMessage = data.query.message || '';\n  console.log('✅ User ID depuis query:', userId);\n}\n// LEGACY - Compatibilité avec ancien chat interface\nelse if (data.chatInput) {\n  console.log('🔄 Mode legacy détecté');\n  actualMessage = data.chatInput;\n  \n  if (actualMessage.startsWith('INIT_USER:')) {\n    const parts = actualMessage.split('|');\n    userId = parts[0].replace('INIT_USER:', '');\n    actualMessage = parts[1] || 'où j\\'en suis ?';\n    console.log('✅ User ID extrait depuis INIT_USER:', userId);\n  } else if (data.sessionId) {\n    userId = data.sessionId;\n    console.log('✅ User ID depuis sessionId:', userId);\n  }\n}\nelse {\n  console.log('❌ Structure de données non reconnue');\n  console.log('Clés disponibles:', Object.keys(data));\n  console.log('Type de body:', typeof data.body);\n  console.log('Type de query:', typeof data.query);\n}\n\nconsole.log('🎯 User ID FINAL:', userId);\nconsole.log('💬 Message FINAL:', actualMessage);\n\n// Validation finale\nconst isValidUserId = userId && !userId.startsWith('anonymous');\nconst hasMessage = actualMessage && actualMessage.trim().length > 0;\n\nconsole.log('✅ UserId valide:', isValidUserId);\nconsole.log('✅ Message valide:', hasMessage);\n\n// Construction du payload final\nconst payload = {\n  user_id: userId,\n  timestamp: new Date().toISOString(),\n  original_message: actualMessage,\n  is_welcome_session: actualMessage.includes('INIT_USER:'),\n  session_type: 'working',\n  debug_info: {\n    source_type: data.body?.userId ? 'WEBHOOK_POST' :\n                 data.query?.userId ? 'WEBHOOK_GET' :\n                 data.chatInput ? 'LEGACY_CHAT' : 'UNKNOWN',\n    has_user_id: isValidUserId,\n    has_message: hasMessage,\n    original_keys: Object.keys(data),\n    body_keys: data.body ? Object.keys(data.body) : [],\n    extraction_success: isValidUserId && hasMessage\n  }\n};\n\nconsole.log('✅ PAYLOAD FINAL:', JSON.stringify(payload, null, 2));\nreturn [{ json: payload }];"
+      },
+      "id": "32f71410-4f5c-4660-96f1-83246e17f78d",
+      "name": "🔧 Enhanced Prepare Chat Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        845
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.original_message }}",
+        "options": {
+          "systemMessage": "# CLASSIFICATEUR D'INTENTIONS - AGENT N8N\n\n## 🎯 MISSION\nTu es un agent classificateur qui DOIT obligatoirement utiliser l'outil THINK avant de répondre.\n\n## 📋 PROCESSUS OBLIGATOIRE\n\n### ÉTAPE 1 : ANALYSE AVEC THINK (OBLIGATOIRE)\n```\nUTILISE L'OUTIL THINK pour analyser ce message exact :\n\"{{ $json.original_message }}\"\n```\n\n**Dans ton analyse THINK, examine :**\n- Le contenu exact du message utilisateur\n- La présence de mots-clés d'intention\n- Les nombres présents dans le message RÉEL (pas les exemples)\n- Le type d'action demandée\n\n### ÉTAPE 2 : CLASSIFICATION (APRÈS THINK)\nRéponds ensuite avec le JSON de classification.\n\n## 🔍 RÈGLES DE CLASSIFICATION\n\n### 🎯 **GOAL_UPDATE** (PRIORITÉ ABSOLUE)\n- **Trigger** : Message contient \"objectif\" + un nombre\n- **Action** : Extraire le nombre EXACT du message utilisateur uniquement\n- **Patterns** (exemples de structure, PAS les vraies valeurs) :\n  - \"nouvel objectif [NOMBRE]g\" → extrait [NOMBRE]\n  - \"objectif [NOMBRE]g\" → extrait [NOMBRE]  \n  - \"changer objectif à [NOMBRE]g\" → extrait [NOMBRE]\n\n### 🍽️ **MEAL** (Consommation alimentaire)\n- **Trigger** : Verbes d'action alimentaire + nom d'aliment\n- **Verbes** : mangé, bu, pris, consommé, avalé, grignoté\n- **Data** : Description complète de ce qui est consommé\n\n### 📊 **STATUS** (Demande d'informations)\n- **Trigger** : Demande de progression/bilan\n- **Expressions** : \"où j'en suis ?\", \"ma progression\", \"mon bilan\", \"mes stats\"\n- **Condition** : AUCUN aliment ni objectif mentionné\n\n### 📸 **IMAGE** (Analyse d'image)\n- **Trigger** : Référence à une image/photo\n- **Expressions** : \"voici une photo\", \"regarde cette image\", \"analyse cette photo\"\n\n## ⚠️ RÈGLES CRITIQUES D'EXTRACTION\n\n1. **Message à analyser** : `\"{{ $json.original_message }}\"`\n2. **Extraction de nombres** :\n   - Lis UNIQUEMENT le message utilisateur réel\n   - Ignore TOUS les exemples et patterns\n   - Cherche le premier nombre dans le message réel\n   - Utilise ce nombre exact dans \"new_goal\"\n\n## 📤 FORMAT DE RÉPONSE (APRÈS THINK)\n\n```json\n{\n  \"action\": \"GOAL_UPDATE|MEAL|STATUS|IMAGE\",\n  \"confidence\": \"high|medium|low\",\n  \"data\": {\n    // GOAL_UPDATE: {\"new_goal\": NOMBRE_DU_MESSAGE_UTILISATEUR}\n    // MEAL: {\"description\": \"description_complète_consommation\"}\n    // STATUS: {}\n    // IMAGE: {}\n  },\n  \"reasoning\": \"explication_avec_nombre_exact_trouvé\"\n}\n```\n\n## 🔴 RAPPELS IMPORTANTS\n\n- **Message source** : `\"{{ $json.original_message }}\"`\n- **Processus** : THINK d'abord, JSON ensuite\n- **Nombres** : Seulement ceux du message utilisateur réel\n- **Priorité** : GOAL_UPDATE avant tout autre classification\n- **Exactitude** : Extraire les valeurs précises, pas approximatives\n\n---\n\n**⚡ DÉMARRAGE** : Commence IMMÉDIATEMENT par utiliser l'outil THINK pour analyser le message utilisateur."
+        }
+      },
+      "id": "98fdfb89-540c-4666-a4d1-9366471d1ead",
+      "name": "🤖 Smart Classifier",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.9,
+      "position": [
+        472,
+        845
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🔧 Parse et route les actions - VERSION CORRIGÉE\nconst classifierData = $input.first().json;\nconst chatData = $('🔧 Enhanced Prepare Chat Data').first().json;\n\nconsole.log('=== PARSE ACTIONS ===');\nconsole.log('🤖 Données classifier:', JSON.stringify(classifierData, null, 2));\nconsole.log('💬 Données chat:', JSON.stringify(chatData, null, 2));\n\nlet result;\n\ntry {\n  // Parser la réponse du classifier\n  if (classifierData.output) {\n    result = JSON.parse(classifierData.output);\n  } else {\n    result = classifierData;\n  }\n  \n  // Ajouter les métadonnées utilisateur depuis Enhanced Prepare Chat Data\n  result.user_id = chatData.user_id;\n  result.timestamp = chatData.timestamp;\n  result.original_message = chatData.original_message;\n  result.is_welcome_session = chatData.is_welcome_session;\n  \n  console.log('✅ Action classifiée avec métadonnées:', JSON.stringify(result, null, 2));\n  \n  return [{ json: result }];\n  \n} catch (error) {\n  console.log('❌ Erreur parsing:', error.message);\n  \n  // Fallback vers MEAL par défaut avec métadonnées\n  return [{ \n    json: { \n      action: \"MEAL\",\n      confidence: \"medium\",\n      data: { description: chatData.original_message },\n      reasoning: \"Classification par défaut\",\n      user_id: chatData.user_id,\n      timestamp: chatData.timestamp,\n      original_message: chatData.original_message,\n      is_welcome_session: chatData.is_welcome_session\n    } \n  }];\n}"
+      },
+      "id": "5d5875c1-2c84-4160-b823-ac884bf5af2b",
+      "name": "🔧 Parse Actions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        845
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE user_goals \nSET daily_protein_goal = {{ $json.data.new_goal }}, \n    updated_at = NOW() \nWHERE user_id = '{{ $json.user_id }}'\nRETURNING user_id, daily_protein_goal, 'goal_updated' as action;",
+        "options": {}
+      },
+      "id": "261d43cd-f181-469b-b832-baa21275e949",
+      "name": "🎯 Update Goal",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1560,
+        660
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "GaPd24j9QO3x8L5L",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  DATE(me.timestamp) as date,\n  up.prenom,\n  COALESCE(SUM(me.proteines_apportees), 0) as total_proteins,\n  ug.daily_protein_goal,\n  CASE \n    WHEN ug.daily_protein_goal > 0 THEN ROUND((COALESCE(SUM(me.proteines_apportees), 0) / ug.daily_protein_goal * 100)::numeric, 1)\n    ELSE 0\n  END as progress_percent\nFROM user_goals ug\nJOIN user_profiles up ON ug.user_id = up.user_id\nLEFT JOIN meal_entries me ON ug.user_id = me.user_id AND DATE(me.timestamp) = CURRENT_DATE\nWHERE ug.user_id = '{{ $json.user_id }}'\nGROUP BY DATE(me.timestamp), up.prenom, ug.daily_protein_goal, ug.user_id;",
+        "options": {}
+      },
+      "id": "30ab9401-11db-4438-a017-03e900a85512",
+      "name": "📊 Get Status",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1560,
+        460
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "GaPd24j9QO3x8L5L",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.data.description }}",
+        "options": {
+          "systemMessage": "Tu es un expert en nutrition spécialisé dans l'analyse complète de repas.\n\nAnalyse cette description de repas et retourne les informations nutritionnelles :\n\nTu dois estimer :\n1. Le ou les aliments principaux\n2. Les quantités approximatives \n3. Les protéines totales apportées\n4. La méthode d'estimation utilisée\n\nRéponds UNIQUEMENT en JSON :\n{\n  \"aliments\": [\n    {\n      \"nom\": \"nom de l'aliment\",\n      \"quantite_g\": nombre_en_grammes,\n      \"proteines_100g\": protéines_pour_100g,\n      \"proteines_portion\": protéines_de_cette_portion\n    }\n  ],\n  \"proteines_totales\": somme_des_proteines,\n  \"confiance\": \"high|medium|low\",\n  \"methode\": \"description de la méthode d'estimation\",\n  \"raisonnement\": \"explication des calculs\"\n}"
+        }
+      },
+      "id": "a03cf7fa-62a4-4971-9834-125cbdb4a74e",
+      "name": "🔍 Meal Analyzer",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.9,
+      "position": [
+        1320,
+        870
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Tu es un agent spécialisé dans l'analyse d'images d'aliments et d'emballages alimentaires.\n\nAnalyse cette image et identifie :\n- Le produit alimentaire visible (nom exact)\n- La marque visible sur l'emballage\n- Les informations nutritionnelles si une étiquette est visible\n- La portion consommée si mentionnée par l'utilisateur\n\nSi tu vois un pot/emballage et que l'utilisateur dit \"j'en ai mangé la moitié\", estime la portion.\n\nRéponds UNIQUEMENT en JSON :\n{\n  \"aliments\": [\n    {\n      \"nom\": \"nom de l'aliment identifié\",\n      \"quantite_g\": poids_en_grammes_estime,\n      \"proteines_100g\": protéines_pour_100g,\n      \"proteines_portion\": protéines_de_cette_portion\n    }\n  ],\n  \"proteines_totales\": somme_des_proteines,\n  \"confiance\": \"high|medium|low\",\n  \"methode\": \"Analyse d'image\",\n  \"raisonnement\": \"description détaillée de ce qui est visible\"\n}\n\nDescription de l'utilisateur : {{ $json.original_message || 'Analyse de l'image fournie' }}\n\nImage à analyser fournie par l'utilisateur.",
+        "options": {}
+      },
+      "id": "02413b1f-00b9-4254-8dd4-9e294b92b719",
+      "name": "👁️ Image Analyzer",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.9,
+      "position": [
+        1320,
+        1370
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 📊 Traitement et sauvegarde du repas analysé - VERSION PARSING BACKTICKS\nconst mealAnalysisData = $input.first().json;\nconst parsedActionsData = $('🔧 Parse Actions').first().json;\n\nconsole.log('=== PROCESS MEAL DEBUG ===');\nconsole.log('🔍 Données Meal Analyzer:', JSON.stringify(mealAnalysisData, null, 2));\nconsole.log('🔍 Données Parse Actions:', JSON.stringify(parsedActionsData, null, 2));\n\nlet mealData;\n\ntry {\n  let jsonString;\n  \n  // Parser le résultat de l'agent avec gestion des backticks markdown\n  if (mealAnalysisData.output) {\n    jsonString = mealAnalysisData.output;\n    \n    // 🔧 CORRECTION : Nettoyer les backticks markdown\n    if (jsonString.includes('```json')) {\n      jsonString = jsonString\n        .replace(/```json\\s*\\n?/g, '')  // Supprimer ```json au début\n        .replace(/\\n?```$/g, '')        // Supprimer ``` à la fin\n        .trim();\n    }\n    \n    console.log('✅ JSON nettoyé:', jsonString);\n    mealData = JSON.parse(jsonString);\n  } else {\n    mealData = mealAnalysisData;\n  }\n  \n  console.log('✅ Données meal parsées:', JSON.stringify(mealData, null, 2));\n  \n  // Récupérer les métadonnées utilisateur depuis Parse Actions\n  const userId = parsedActionsData.user_id;\n  const timestamp = parsedActionsData.timestamp;\n  const originalMessage = parsedActionsData.original_message;\n  \n  console.log('✅ Métadonnées utilisateur:');\n  console.log('   - User ID:', userId);\n  console.log('   - Timestamp:', timestamp);\n  console.log('   - Message:', originalMessage);\n  \n  // Échapper les apostrophes pour éviter les erreurs SQL\n  const escapedMessage = originalMessage ? originalMessage.replace(/'/g, \"''\") : '';\n  const escapedRaisonnement = mealData.raisonnement ? mealData.raisonnement.replace(/'/g, \"''\") : '';\n  const escapedMethode = (mealData.methode || 'IA Analysis').replace(/'/g, \"''\");\n  \n  // Construire les données pour la base avec calcul du poids estimé\n  const poidsEstime = mealData.aliments && mealData.aliments.length > 0 \n    ? mealData.aliments.reduce((total, aliment) => total + (aliment.quantite_g || 0), 0)\n    : 200;\n  \n  const finalData = {\n    user_id: userId,\n    timestamp: timestamp,\n    description_originale: escapedMessage,\n    aliments: JSON.stringify(mealData.aliments || []),\n    proteines_totales: mealData.proteines_totales || 0,\n    poids_estime: poidsEstime,\n    confiance: mealData.confiance || 'medium',\n    methode: escapedMethode,\n    raisonnement: escapedRaisonnement\n  };\n  \n  console.log('✅ Données finales pour DB:', JSON.stringify(finalData, null, 2));\n  \n  return [{ json: finalData }];\n  \n} catch (error) {\n  console.log('❌ Erreur parsing meal:', error.message);\n  console.log('❌ JSON string problématique:', mealAnalysisData.output);\n  \n  // Fallback amélioré avec métadonnées\n  return [{ \n    json: {\n      user_id: parsedActionsData.user_id,\n      timestamp: parsedActionsData.timestamp,\n      description_originale: (parsedActionsData.original_message || '').replace(/'/g, \"''\"),\n      aliments: JSON.stringify([{nom: \"aliment non identifié\", quantite_g: 100, proteines_100g: 20, proteines_portion: 20}]),\n      proteines_totales: 20,\n      poids_estime: 100,\n      confiance: 'low',\n      methode: 'Fallback estimation',\n      raisonnement: 'Erreur dans l\\'analyse IA: ' + error.message\n    }\n  }];\n}"
+      },
+      "id": "32984648-418c-437f-9417-32a7ff22f26b",
+      "name": "🔧 Process Meal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        1170
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO meal_entries (\n  user_id,\n  produit,\n  description_visuelle,\n  proteines_apportees,\n  poids_estime,\n  methode,\n  source,\n  timestamp\n) VALUES (\n  '{{ $json.user_id }}',\n  $produit${{ $json.description_originale }}$produit$,\n  $description${{ $json.raisonnement }}$description$,\n  {{ $json.proteines_totales }},\n  {{ $json.poids_estime }},\n  $methode${{ $json.methode }}$methode$,\n  'IA Analysis',\n  '{{ $json.timestamp }}'\n) RETURNING \n  user_id,\n  proteines_apportees, \n  'meal_saved' as action;",
+        "options": {}
+      },
+      "id": "4bf312f9-5343-4db3-bfad-e6fa4bd1d28f",
+      "name": "💾 Save Meal",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1916,
+        1170
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "GaPd24j9QO3x8L5L",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  CURRENT_DATE as date,\n  ug.user_id,\n  up.prenom,  -- ← CORRECTION : récupérer le vrai prénom\n  COALESCE(SUM(me.proteines_apportees), 0) as total_proteins,\n  ug.daily_protein_goal,\n  CASE \n    WHEN ug.daily_protein_goal > 0 THEN \n      ROUND((COALESCE(SUM(me.proteines_apportees), 0) * 100.0 / ug.daily_protein_goal), 1)\n    ELSE 0 \n  END as progress_percent,\n  'meal_saved' as action\nFROM user_goals ug\nJOIN user_profiles up ON ug.user_id = up.user_id  -- ← CORRECTION : ajouter le JOIN\nLEFT JOIN meal_entries me ON ug.user_id = me.user_id \n  AND DATE(me.timestamp) = CURRENT_DATE\nWHERE ug.user_id = '{{ $json.user_id }}'\nGROUP BY ug.user_id, ug.daily_protein_goal, up.prenom;",
+        "options": {}
+      },
+      "id": "fe7cfffd-e0b7-4cd8-a26d-d4031f9f829e",
+      "name": "📈 Get Updated Status",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2136,
+        1170
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "GaPd24j9QO3x8L5L",
+          "name": "Postgres account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 💬 Génération de réponses personnalisées - VERSION CORRIGÉE POUR JSON SAFE\nconst allItems = $input.all();\nlet response = '';\n\nconsole.log('=== FORMAT RESPONSE ===');\nallItems.forEach((item, index) => {\n  console.log(`Item ${index}:`, JSON.stringify(item.json, null, 2));\n});\n\n// Identifier le type d'action\nfor (const item of allItems) {\n  const data = item.json;\n  \n  if (data.action === 'goal_updated') {\n    response = `🎯 Objectif mis à jour !\n\nVotre nouvel objectif quotidien est fixé à ${data.daily_protein_goal}g de protéines.\n\nContinuez à me dire ce que vous mangez pour suivre votre progression ! 💪`;\n    break;\n  }\n  \n  if (data.prenom && data.total_proteins !== undefined) {\n    const prenom = data.prenom;\n    const progressEmoji = data.progress_percent >= 100 ? '🎉' : data.progress_percent >= 75 ? '💪' : data.progress_percent >= 50 ? '👍' : '📈';\n    const remaining = Math.max(0, data.daily_protein_goal - data.total_proteins);\n    \n    if (data.action === 'meal_saved') {\n      response = `✅ Repas enregistré, ${prenom} !\n\n📊 Votre progression aujourd'hui :\n• Protéines consommées : ${data.total_proteins}g\n• Objectif quotidien : ${data.daily_protein_goal}g\n• Progression : ${data.progress_percent}% ${progressEmoji}\n\n${data.progress_percent >= 100 ? '🎯 Félicitations ! Objectif atteint !' : `Il vous reste ${remaining}g à consommer.`}`;\n    } else {\n      response = `${progressEmoji} Bonjour ${prenom} !\n\n📊 Votre progression aujourd'hui :\n• Protéines consommées : ${data.total_proteins}g\n• Objectif quotidien : ${data.daily_protein_goal}g\n• Progression : ${data.progress_percent}%\n\n${data.progress_percent >= 100 ? '🎯 Objectif atteint ! Bravo !' : `Plus que ${remaining}g à consommer ! 💪`}`;\n    }\n    break;\n  }\n}\n\nif (!response) {\n  response = '❌ Erreur dans le traitement\\\\n\\\\nJe n\\'ai pas pu traiter votre demande. Veuillez réessayer.';\n}\n\nconsole.log('Réponse générée:', response);\n\n// 🔧 AMÉLIORATION : Nettoyage spécial pour JSON valide\nconst jsonSafeResponse = response\n  .replace(/\\\\/g, '')                    // Supprimer tous les backslashes\n  .replace(/\\n/g, '\\\\n')                 // Échapper les vraies nouvelles lignes pour JSON\n  .replace(/\\r/g, '\\\\r')                 // Échapper les retours chariot\n  .replace(/\\t/g, '\\\\t')                 // Échapper les tabulations\n  .replace(/\"/g, '\\\\\"')                  // Échapper les guillemets\n  .replace(/[\\x00-\\x1F\\x7F]/g, '')       // Supprimer les caractères de contrôle\n  .trim();                               // Supprimer les espaces en début/fin\n\nconsole.log('Réponse JSON-safe:', jsonSafeResponse);\n\n// Construire une réponse JSON complètement sûre\nconst safeJsonResponse = {\n  message: jsonSafeResponse,\n  status: \"success\",\n  timestamp: new Date().toISOString(),\n  messageLength: jsonSafeResponse.length\n};\n\nconsole.log('Objet JSON final:', JSON.stringify(safeJsonResponse, null, 2));\n\nreturn [{ json: safeJsonResponse }];"
+      },
+      "id": "bff8f1f9-c667-4af9-bbe6-9849e7c44d24",
+      "name": "💬 Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2340,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-2024-11-20",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-2024-11-20"
+        },
+        "options": {}
+      },
+      "id": "aaeabcf6-c687-4248-9692-05f3fa45680f",
+      "name": "🤖 Classifier Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        440,
+        1065
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "KvKI09VGVtdDw3Bt",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "id": "f3265389-6ea6-4cd2-9b3f-919979ea6886",
+      "name": "🔍 Meal Analyzer Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1348,
+        1090
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "KvKI09VGVtdDw3Bt",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "id": "be2338c1-bbef-4a62-8846-64af745a0517",
+      "name": "👁️ Image Analyzer Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1348,
+        1590
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "KvKI09VGVtdDw3Bt",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "7f19589d-01af-43f5-9a93-97f46182ba98",
+      "name": "🤖 Classifier Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1,
+      "position": [
+        560,
+        1065
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "88f3f33c-5b37-4e62-b6b9-77a8b91a1627",
+      "name": "🔍 Meal Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1,
+      "position": [
+        1468,
+        1090
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b893f25e-3d91-48f3-ae4d-07ffc19bdddc",
+      "name": "👁️ Image Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1,
+      "position": [
+        1468,
+        1590
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.htmlContent }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        0
+      ],
+      "id": "0361677f-58b3-4bce-907b-8d893d81e967",
+      "name": "📄 HTML Success Response"
+    },
+    {
+      "parameters": {
+        "path": "e4a90603-3a21-4289-9f42-0c83f4caf994",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        260
+      ],
+      "id": "3ff63b11-3fc2-4242-b7e4-3d191c542e23",
+      "name": "Webhook",
+      "webhookId": "e4a90603-3a21-4289-9f42-0c83f4caf994"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ebd4abc8-6795-4fbe-ba99-c8574f0e3416",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        845
+      ],
+      "id": "de8b8aef-67ab-4f24-a925-c1ad2926b1fc",
+      "name": "Webhook1",
+      "webhookId": "ebd4abc8-6795-4fbe-ba99-c8574f0e3416"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🖥️ CORRECTION FINALE - Interface de Chat sans caractères parasites\nconst query = $input.first().json.query || {};\nconst userId = query.userId;\nconst prenom = query.prenom;\n\nconsole.log('=== WEBHOOK GET PROCESSING ===');\nconsole.log('Query params:', JSON.stringify(query, null, 2));\nconsole.log('User ID:', userId);\n\nif (!userId) {\n  return [{\n    json: {\n      htmlContent: `\n        <html>\n          <body style=\"font-family: Arial; text-align: center; padding: 50px;\">\n            <h2>❌ Erreur</h2>\n            <p>userId manquant dans l'URL</p>\n            <p>Format attendu: <code>?userId=xxx</code></p>\n          </body>\n        </html>\n      `\n    }\n  }];\n}\n\n// Page HTML de chat CORRIGÉE SANS CARACTÈRES PARASITES\nconst chatHtml = `<!DOCTYPE html>\n<html lang=\"fr\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>DynProt Chat</title>\n    <style>\n        body { \n            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; \n            max-width: 700px; \n            margin: 0 auto; \n            padding: 20px;\n            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n            min-height: 100vh;\n        }\n        .chat-container { \n            background: white;\n            border-radius: 20px;\n            padding: 30px;\n            box-shadow: 0 15px 35px rgba(0,0,0,0.1);\n            backdrop-filter: blur(10px);\n        }\n        .header { \n            text-align: center; \n            margin-bottom: 25px;\n            padding-bottom: 20px;\n            border-bottom: 2px solid #f1f3f4;\n        }\n        .header h1 {\n            color: #2c3e50;\n            margin-bottom: 8px;\n            font-size: 24px;\n        }\n        .header p {\n            color: #7f8c8d;\n            margin: 0;\n        }\n        .user-info { \n            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);\n            padding: 15px 20px; \n            border-radius: 12px; \n            margin-bottom: 25px;\n            border: 1px solid rgba(0,0,0,0.05);\n        }\n        .user-info strong {\n            color: #495057;\n        }\n        .input-group { \n            display: flex; \n            gap: 12px; \n            margin: 25px 0; \n        }\n        #messageInput { \n            flex: 1; \n            padding: 15px 18px; \n            border: 2px solid #e9ecef; \n            border-radius: 12px; \n            font-size: 16px;\n            transition: border-color 0.3s ease;\n            outline: none;\n        }\n        #messageInput:focus {\n            border-color: #667eea;\n            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);\n        }\n        #sendButton { \n            padding: 15px 25px; \n            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n            color: white; \n            border: none; \n            border-radius: 12px; \n            cursor: pointer; \n            font-size: 16px;\n            font-weight: 600;\n            transition: all 0.3s ease;\n            min-width: 100px;\n        }\n        #sendButton:hover { \n            transform: translateY(-2px);\n            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);\n        }\n        #sendButton:disabled {\n            opacity: 0.6;\n            cursor: not-allowed;\n            transform: none;\n        }\n        .suggestions {\n            display: flex;\n            flex-wrap: wrap;\n            gap: 8px;\n            margin: 20px 0;\n            justify-content: center;\n        }\n        .suggestions button {\n            background: #f8f9fa;\n            border: 1px solid #dee2e6;\n            border-radius: 20px;\n            padding: 10px 16px;\n            cursor: pointer;\n            font-size: 14px;\n            transition: all 0.3s ease;\n            white-space: nowrap;\n        }\n        .suggestions button:hover { \n            background: #007bff; \n            color: white;\n            transform: translateY(-1px);\n            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);\n        }\n        .response { \n            margin-top: 25px; \n            padding: 20px; \n            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);\n            border-radius: 12px; \n            display: none;\n            border: 1px solid rgba(0,0,0,0.05);\n            animation: slideIn 0.3s ease-out;\n        }\n        .response.show {\n            display: block;\n        }\n        @keyframes slideIn {\n            from { opacity: 0; transform: translateY(10px); }\n            to { opacity: 1; transform: translateY(0); }\n        }\n        .response .message-content {\n            line-height: 1.6;\n            color: #2c3e50;\n        }\n        .response .message-content .highlight {\n            color: #2980b9;\n            font-weight: 600;\n            background: rgba(52, 152, 219, 0.1);\n            padding: 2px 6px;\n            border-radius: 4px;\n        }\n        .response .message-content strong {\n            color: #27ae60;\n            font-weight: 600;\n        }\n        .response .message-content .emoji {\n            font-size: 1.2em;\n        }\n        .loading {\n            display: flex;\n            align-items: center;\n            gap: 10px;\n            color: #6c757d;\n        }\n        .loading-dots {\n            display: inline-flex;\n            gap: 4px;\n        }\n        .loading-dots span {\n            width: 8px;\n            height: 8px;\n            border-radius: 50%;\n            background: #007bff;\n            animation: bounce 1.4s infinite ease-in-out both;\n        }\n        .loading-dots span:nth-child(1) { animation-delay: -0.32s; }\n        .loading-dots span:nth-child(2) { animation-delay: -0.16s; }\n        @keyframes bounce {\n            0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }\n            40% { transform: scale(1); opacity: 1; }\n        }\n        .error-message {\n            background: #f8d7da;\n            color: #721c24;\n            border: 1px solid #f5c6cb;\n            border-radius: 8px;\n            padding: 15px;\n            margin-top: 15px;\n        }\n        /* Responsive */\n        @media (max-width: 600px) {\n            body { padding: 10px; }\n            .chat-container { padding: 20px; }\n            .input-group { flex-direction: column; }\n            #sendButton { width: 100%; }\n            .suggestions { justify-content: stretch; }\n            .suggestions button { flex: 1; text-align: center; }\n        }\n    </style>\n</head>\n<body>\n    <div class=\"chat-container\">\n        <div class=\"header\">\n            <h1>🥗 DynProt Chat</h1>\n            <p>Votre Assistant Nutritionnel</p>\n        </div>\n        \n        <div class=\"user-info\">\n            <strong>👤 Utilisateur :</strong> ${prenom || 'Utilisateur'}\n        </div>\n        \n        <div class=\"input-group\">\n            <input type=\"text\" id=\"messageInput\" placeholder=\"Décrivez votre repas ou posez une question...\">\n            <button id=\"sendButton\" onclick=\"sendMessage()\">Envoyer</button>\n        </div>\n        \n        <div class=\"suggestions\">\n            <button onclick=\"quickMessage('où j\\\\'en suis ?')\">📊 Ma progression</button>\n            <button onclick=\"quickMessage('j\\\\'ai mangé 200g de poulet grillé')\">🍗 Ajouter repas</button>\n            <button onclick=\"quickMessage('nouvel objectif 150g')\">🎯 Changer objectif</button>\n            <button onclick=\"quickMessage('bilan de la semaine')\">📈 Bilan hebdo</button>\n        </div>\n        \n        <div id=\"response\" class=\"response\"></div>\n    </div>\n\n    <script>\n        const userId = '${userId}';\n        \n        function quickMessage(message) {\n            document.getElementById('messageInput').value = message;\n            sendMessage();\n        }\n        \n        async function sendMessage() {\n            const messageInput = document.getElementById('messageInput');\n            const sendButton = document.getElementById('sendButton');\n            const responseDiv = document.getElementById('response');\n            const message = messageInput.value.trim();\n            \n            if (!message) return;\n            \n            // Désactiver l'interface pendant l'envoi\n            sendButton.disabled = true;\n            sendButton.textContent = 'Envoi...';\n            messageInput.disabled = true;\n            \n            // Afficher le loading\n            responseDiv.className = 'response show';\n            responseDiv.innerHTML = \\`\n                <div class=\"loading\">\n                    <div class=\"loading-dots\">\n                        <span></span>\n                        <span></span>\n                        <span></span>\n                    </div>\n                    <span>Analyse en cours...</span>\n                </div>\n            \\`;\n            \n            try {\n                const response = await fetch('http://localhost:5678/webhook/ebd4abc8-6795-4fbe-ba99-c8574f0e3416', {\n                    method: 'POST',\n                    headers: { \n                        'Content-Type': 'application/json',\n                        'Accept': 'application/json'\n                    },\n                    body: JSON.stringify({\n                        userId: userId,\n                        message: message\n                    })\n                });\n                \n                if (!response.ok) {\n                    throw new Error(\\`Erreur HTTP: \\${response.status}\\`);\n                }\n                \n                const result = await response.json();\n                console.log('Réponse reçue:', result);\n                \n                // ✅ CORRECTION : Parser et formater la réponse\n                let displayMessage = '';\n                \n                if (result.message) {\n                    // Décoder les caractères échappés\n                    displayMessage = result.message\n                        .replace(/\\\\\\\\n/g, '\\\\n')           // Remplacer \\\\n par des vraies nouvelles lignes\n                        .replace(/\\\\\\\\\"/g, '\"')           // Remplacer \\\\\" par des guillemets\n                        .replace(/\\\\\\\\\\\\\\\\/g, '\\\\\\\\')       // Remplacer \\\\\\\\\\\\\\\\ par \\\\\\\\\n                        .replace(/\\\\\\\\t/g, '\\\\t')           // Remplacer \\\\t par des tabulations\n                        .replace(/\\\\\\\\r/g, '\\\\r');          // Remplacer \\\\r par des retours chariot\n                } else if (result.status === 'success' && result.data) {\n                    displayMessage = 'Données reçues avec succès';\n                } else {\n                    displayMessage = JSON.stringify(result, null, 2);\n                }\n                \n                // Afficher le message formaté\n                responseDiv.innerHTML = \\`\n                    <div class=\"message-content\">\n                        \\${formatMessage(displayMessage)}\n                    </div>\n                \\`;\n                \n            } catch (error) {\n                console.error('Erreur:', error);\n                responseDiv.innerHTML = \\`\n                    <div class=\"error-message\">\n                        <strong>❌ Erreur de communication</strong><br>\n                        \\${error.message}<br>\n                        <small>Vérifiez votre connexion et réessayez.</small>\n                    </div>\n                \\`;\n            } finally {\n                // Réactiver l'interface\n                sendButton.disabled = false;\n                sendButton.textContent = 'Envoyer';\n                messageInput.disabled = false;\n                messageInput.value = '';\n                messageInput.focus();\n            }\n        }\n        \n        // ✅ FONCTION CORRIGÉE : Formatage sans caractères parasites\n        function formatMessage(message) {\n            return message\n                .replace(/^=.*$/gm, '')            // Supprimer = et emojis en début de ligne\n                .replace(/^\\\\s*=.*$/gm, '')                         // Supprimer toutes les lignes qui commencent par =\n                .replace(/=\\\\//g, '')                               // Supprimer =/ n'importe où\n                .replace(/\\\\*\\\\*(.*?)\\\\*\\\\*/g, '<span class=\"highlight\">$1</span>')  // **texte** → highlight\n                .replace(/\\\\*(.*?)\\\\*/g, '<em>$1</em>')             // *texte* → <em>texte</em>\n                .replace(/\\\\n/g, '<br>')                            // Nouvelles lignes → <br>\n                .replace(/•/g, '&bull;')                            // Bullets\n                .replace(/^\\\\s*<br>/gm, '')                         // Supprimer les <br> en début de ligne\n                .replace(/<br>\\\\s*<br>/g, '<br>')                   // Supprimer les doubles <br>\n                .trim();                                            // Supprimer les espaces en début/fin\n        }\n        \n        // Enter pour envoyer\n        document.getElementById('messageInput').addEventListener('keypress', function(e) {\n            if (e.key === 'Enter' && !e.shiftKey) {\n                e.preventDefault();\n                sendMessage();\n            }\n        });\n        \n        // Focus automatique sur l'input\n        document.getElementById('messageInput').focus();\n    </script>\n</body>\n</html>`;\n\nconst chatHtmlClean = chatHtml.replace(/^\\=+$/gm, ''); // Supprime toute ligne ne contenant qu'un =\nreturn [{\n  json: { \n    htmlContent: chatHtmlClean,\n    responseType: 'html'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        260
+      ],
+      "id": "96eccfd8-d4ba-49cb-b2c1-20a0bf4438a4",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "= ={{ $json.htmlContent }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        440,
+        260
+      ],
+      "id": "c0aab0a9-dbb8-466d-a460-501142992776",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"message\": \"{{ $json.message }}\",\n  \"status\": \"{{ $json.status }}\",\n  \"timestamp\": \"{{ $json.timestamp }}\"\n}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        2576,
+        720
+      ],
+      "id": "e4a96c0d-0985-45a4-835d-b0a58e5fed0d",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "STATUS",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "7f7fd388-478c-4155-ac62-a4050a96632a"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "4689680f-1f8e-400c-b01a-157dbdf03afc",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "GOAL_UPDATE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "354c8d13-1617-4a31-8f24-4167d8ce4084",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "MEAL",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "7527908e-9b19-4260-8fdb-0379dc336369",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "IMAGE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1100,
+        824
+      ],
+      "id": "dcbd3adc-0c9d-4522-873a-11679c6db5c4",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "description": "Analyse méthodique du message utilisateur pour classification d'intention. Examine : 1) Présence du mot \"objectif\" + nombre → GOAL_UPDATE prioritaire, 2) Présence d'aliments ou verbes de consommation (mangé, bu, pris) → MEAL, 3) Questions sur progression sans aliment/objectif → STATUS, 4) Mentions d'images → IMAGE. Applique les règles de priorité et justifie le choix avant la réponse JSON finale."
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1,
+      "position": [
+        680,
+        1065
+      ],
+      "id": "d003ebf3-d6d2-4f5e-b034-ae891c4e60ee",
+      "name": "Think"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "📝 Enhanced Form Onboarding": {
+      "main": [
+        [
+          {
+            "node": "🔧 Process Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔧 Process Profile": {
+      "main": [
+        [
+          {
+            "node": "💾 Save User Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Save User Profile": {
+      "main": [
+        [
+          {
+            "node": "💬 Generate Welcome Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💬 Generate Welcome Message": {
+      "main": [
+        [
+          {
+            "node": "💾 Save Welcome Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Save Welcome Message": {
+      "main": [
+        [
+          {
+            "node": "🎨 Generate Success Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔧 Enhanced Prepare Chat Data": {
+      "main": [
+        [
+          {
+            "node": "🤖 Smart Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 Smart Classifier": {
+      "main": [
+        [
+          {
+            "node": "🔧 Parse Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔧 Parse Actions": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎯 Update Goal": {
+      "main": [
+        [
+          {
+            "node": "💬 Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 Get Status": {
+      "main": [
+        [
+          {
+            "node": "💬 Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Meal Analyzer": {
+      "main": [
+        [
+          {
+            "node": "🔧 Process Meal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "👁️ Image Analyzer": {
+      "main": [
+        [
+          {
+            "node": "🔧 Process Meal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔧 Process Meal": {
+      "main": [
+        [
+          {
+            "node": "💾 Save Meal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Save Meal": {
+      "main": [
+        [
+          {
+            "node": "📈 Get Updated Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📈 Get Updated Status": {
+      "main": [
+        [
+          {
+            "node": "💬 Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 Classifier Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🤖 Smart Classifier",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Meal Analyzer Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🔍 Meal Analyzer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "👁️ Image Analyzer Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "👁️ Image Analyzer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🤖 Classifier Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "🤖 Smart Classifier",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔍 Meal Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "🔍 Meal Analyzer",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "👁️ Image Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "👁️ Image Analyzer",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎨 Generate Success Page": {
+      "main": [
+        [
+          {
+            "node": "📄 HTML Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "🔧 Enhanced Prepare Chat Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💬 Format Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "📊 Get Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🎯 Update Goal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🔍 Meal Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "👁️ Image Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think": {
+      "ai_tool": [
+        [
+          {
+            "node": "🤖 Smart Classifier",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "437ec59e-c4de-4aff-8d50-25a85b97805e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d0d287503b40cc7954d6643957a6c1b6e7d06f905ce81aad489a7c6d9432ba3f"
+  },
+  "id": "LGAfk8XJnhKmg6DB",
+  "tags": []
+}
